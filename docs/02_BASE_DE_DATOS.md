@@ -25,3 +25,5 @@ En la primera revisión faltaban campos que había editado en VS Code. Guardé l
 ```
 
 Al terminar la sesión quedaron creadas las tablas `establishments`, `room_types` y `rooms`. Las demás migraciones del modelo quedan para las siguientes sesiones.
+
+
