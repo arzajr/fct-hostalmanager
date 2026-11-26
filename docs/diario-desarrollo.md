@@ -6,11 +6,15 @@ Durante la primera preparación del entorno, el contenedor de MariaDB estaba en 
 
 Al revisar la salida de la comprobación encontré el mensaje `Unknown healthcheck option ping`. La opción `ping` era incompatible con el script utilizado. Configuré en `compose.yaml` el comando `healthcheck.sh --connect --innodb_initialized` y comprobé con `docker compose ps` que MariaDB pasaba al estado `healthy`.
 
+
+
 ## 24 de noviembre de 2026 · Creación de la aplicación base
 
 Creé la aplicación base de Laravel 13 en `aplicacion/` usando Composer desde un contenedor temporal de Docker. Antes de guardarla, comprobé con `git add --dry-run` qué archivos incluiría Git. Verifiqué que se incluían `.env.example` y `composer.lock`, y que `.env` y `vendor/` quedaban excluidos.
 
 Commit de referencia: `febe555`.
+
+
 
 ## 25 de noviembre de 2026 · Primer arranque con Sail y MariaDB
 
@@ -37,3 +41,160 @@ Ejecuté `./vendor/bin/sail artisan migrate` para crear las tablas iniciales y r
 ### Resultado
 
 El entorno local quedó operativo. Comprobé que el navegador llega al contenedor de Laravel por el puerto 80 y que Laravel puede consultar MariaDB. La incidencia me ayudó a distinguir dos comprobaciones: el estado `healthy` indica que el servicio de base de datos está preparado, y las migraciones crean las tablas que necesita la aplicación.
+
+
+
+## 26 de noviembre de 2026 · Migraciones de establecimientos, tipos de habitación y habitaciones
+
+Hoy creé las tres primeras tablas propias de HostalManager en MariaDB. Empecé por
+`establishments`, continué con `room_types` y terminé con `rooms`. Elegí ese
+orden porque cada tipo de habitación pertenece a un establecimiento y cada
+habitación hace referencia tanto a su establecimiento como a su tipo.
+
+### Tabla `establishments`
+
+Desde `~/fct-hostalmanager/aplicacion`, generé el archivo de migración con Artisan.
+
+```bash
+./vendor/bin/sail artisan make:migration create_establishments_table
+```
+
+Decidí que el teléfono, la dirección, la ciudad y el código postal fueran
+obligatorios para registrar un establecimiento. De esta forma, cada hostal
+tiene una ubicación y un teléfono de contacto. El correo electrónico es
+opcional. También definí `slug` como único para que dos establecimientos
+no puedan compartir el mismo identificador en la URL.
+
+```php
+Schema::create('establishments', function (Blueprint $table) {
+    $table->id();
+    $table->string('name', 150);
+    $table->string('slug', 150)->unique();
+    $table->string('email', 255)->nullable();
+    $table->string('phone', 30);
+    $table->string('address', 255);
+    $table->string('city', 100);
+    $table->string('postal_code', 20);
+    $table->timestamps();
+});
+```
+
+Antes de aplicar la migración, revisé el SQL que generaría Laravel.
+
+```bash
+./vendor/bin/sail artisan migrate --pretend
+```
+
+En la salida comprobé que `email` admitía `NULL` y que los campos obligatorios
+aparecían como `NOT NULL`. También observé que Laravel generaba un `CREATE TABLE`
+para crear la tabla y un `ALTER TABLE` para añadir la restricción de unicidad
+de `slug`.
+
+A continuación, apliqué la migración en MariaDB.
+
+```bash
+./vendor/bin/sail artisan migrate
+```
+
+```text
+2026_11_26_164838_create_establishments_table ... 59.36ms DONE
+```
+
+### Alias de Sail en WSL
+
+Para abreviar los comandos, añadí este alias al final de `~/.bashrc`.
+
+```bash
+alias sail='sh $([ -f sail ] && echo sail || echo vendor/bin/sail)'
+```
+
+Cargué la nueva configuración en la terminal que tenía abierta y probé el alias
+desde la carpeta `aplicacion/`.
+
+```bash
+source ~/.bashrc
+sail artisan migrate --pretend
+```
+
+Artisan respondió `Nothing to migrate`. En ese momento ya había aplicado la
+migración de `establishments` y todavía no había creado la de `room_types`.
+
+### Tabla `room_types`
+
+Generé la migración para guardar los tipos de habitación que ofrece cada
+establecimiento, por ejemplo, «Doble» con capacidad para dos personas.
+
+```bash
+sail artisan make:migration create_room_types_table
+```
+
+```php
+Schema::create('room_types', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('establishment_id')->constrained();
+    $table->string('name', 100);
+    $table->unsignedTinyInteger('capacity');
+    $table->text('description')->nullable();
+    $table->boolean('active')->default(true);
+    $table->timestamps();
+});
+```
+
+Definí `establishment_id` como clave foránea que apunta a `establishments.id`.
+Así, MariaDB exige que el establecimiento exista antes de registrar un tipo de
+habitación asociado a él.
+
+Al revisar la migración con `sail artisan migrate --pretend`, vi que faltaban
+`description` y `active` en el SQL. Había escrito las dos líneas en VS Code,
+pero todavía no había guardado el archivo. Lo guardé y repetí la comprobación.
+Esta vez aparecieron la descripción opcional y el campo `active` con valor
+predeterminado `1` (`true`). Después ejecuté `sail artisan migrate`.
+
+### Tabla `rooms`
+
+Generé la migración para las habitaciones físicas de cada establecimiento,
+como la habitación `201`.
+
+```bash
+sail artisan make:migration create_rooms_table
+```
+
+```php
+Schema::create('rooms', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('establishment_id')->constrained();
+    $table->foreignId('room_type_id')->constrained();
+    $table->string('number', 20);
+    $table->enum('operational_status', ['active', 'maintenance'])->default('active');
+    $table->text('description')->nullable();
+    $table->timestamps();
+});
+```
+
+Guardé el número de puerta como texto para conservar identificadores como
+`001` o `201A`. Para el estado operativo elegí un `ENUM` con dos valores:
+`active` y `maintenance`. Una habitación se registra como `active` por defecto.
+Este campo permite indicar si está en mantenimiento. Para saber si está libre
+durante una estancia, más adelante consultaré las reservas de esas fechas.
+
+Antes de aplicar la migración, ejecuté `sail artisan migrate --pretend`.
+Revisé los valores del `ENUM` y comprobé el destino de las dos claves foráneas
+en las cláusulas `REFERENCES` del SQL.
+
+| Columna de `rooms` | Columna a la que hace referencia |
+|---|---|
+| `establishment_id` | `establishments.id` |
+| `room_type_id` | `room_types.id` |
+
+Por último, ejecuté `sail artisan migrate` para crear `rooms` en MariaDB.
+
+### Cierre de la sesión
+
+Quedaron creadas `establishments`, `room_types` y `rooms`. El siguiente paso
+será cargar un establecimiento, un tipo de habitación y una habitación de
+ejemplo mediante un seeder.
+
+Queda pendiente actualizar el diagrama relacional para reflejar las decisiones
+que cambiaron respecto al diseño inicial: el teléfono, la dirección y la ciudad
+pasaron a ser obligatorios, y `rooms.operational_status` pasó de `VARCHAR(20)`
+a `ENUM('active', 'maintenance')`.

@@ -14,7 +14,7 @@ El sistema consta de:
 ---
 
 ## 🛠️ Stack Tecnológico
-* **Backend:** PHP 8.3+ / Laravel 13 (Arquitectura MVC, Eloquent ORM, Blade)
+* **Backend:** PHP 8.5 / Laravel 13 (Arquitectura MVC, Eloquent ORM, Blade)
 * **Base de Datos:** MariaDB 11.4 (SGBD Relacional, 7 tablas)
 * **Entorno & Contenedores:** Docker Desktop + Laravel Sail sobre **WSL2 (Ubuntu 24.04 LTS)**
 * **Frontend:** HTML5, CSS3, Bootstrap 5 (Responsive & WCAG AA)

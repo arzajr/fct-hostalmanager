@@ -79,7 +79,7 @@ El servicio `laravel.test` apareció como `Up`, con el puerto 80 publicado en el
 
 ## 5. Migraciones iniciales y acceso desde el navegador
 
-Con los contenedores en ejecución, apliqué las migraciones iniciales de Laravel. Estas crean las tablas que necesita el framework, entre ellas `sessions`.
+Con los contenedores en ejecución, ejecuté las migraciones pendientes. En ese momento, el proyecto solo contenía las migraciones iniciales de Laravel, entre ellas la que crea la tabla sessions.
 
 ```bash
 ./vendor/bin/sail artisan migrate
