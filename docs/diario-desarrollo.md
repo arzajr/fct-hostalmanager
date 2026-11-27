@@ -242,3 +242,47 @@ sail artisan db:seed
 ```
 
 Los tres seeders terminaron con `DONE` en el orden previsto. La habitación `201` quedó preparada como dato de prueba para el módulo de reservas. Queda pendiente actualizar el diagrama relacional con los cambios anotados al crear las migraciones.
+
+## 27 de noviembre de 2026 · Huéspedes, reservas, tarifas y personal del establecimiento
+
+Retomé el diagrama con la habitación `201` como ejemplo. Si una huésped vuelve a alojarse en ella, se crea una reserva con otras fechas y se reutilizan la ficha de la huésped y el registro de la habitación. Como `rooms` ya existía, creé primero `guests` y después `reservations`. Así, las dos tablas referenciadas por la reserva ya existían al ejecutar su migración.
+
+### Creación y revisión de las migraciones
+
+| Tabla | Trabajo realizado |
+|---|---|
+| `guests` | Creé la ficha del huésped con `first_name`, `last_name`, `email` y `phone` obligatorios. Definí el teléfono como texto de hasta 30 caracteres para conservar prefijos, espacios y ceros iniciales. |
+| `reservations` | Vinculé cada reserva con `guests.id` mediante `guest_id` y con `rooms.id` mediante `room_id`. Para reservar la `201` se guarda el identificador interno de la habitación. Añadí `check_in`, `check_out`, `status` y `total_price`. Durante la revisión corregí una declaración duplicada de `check_in`. |
+| `room_rates` | Definí el precio por noche en `price_per_night` y su periodo de vigencia mediante `valid_from` y `valid_until`. Corregí el nombre de la clave foránea a `room_type_id`, que referencia `room_types.id`. Así, las habitaciones del mismo tipo comparten la tarifa correspondiente al periodo. |
+| `users` | Inspeccioné la tabla con `sail artisan db:table users` y comprobé en Tinker que contenía **0 usuarios**. Con `Schema::table()` añadí la clave foránea obligatoria `establishment_id` y el campo `role`, que admite `admin` y `staff`, con `staff` por defecto. En `down()` definí la retirada de la clave foránea antes de eliminar las dos columnas añadidas. |
+
+Las tres tablas nuevas incluyen `id`, `created_at` y `updated_at`. Para `price_per_night` y `total_price` utilicé `DECIMAL(10, 2)`, con diez dígitos en total y dos posiciones decimales.
+
+Desde `aplicacion/`, revisé el SQL con `sail artisan migrate --pretend` para comprobar los tipos, los valores por defecto y las referencias generadas por `constrained()`. Después ejecuté `sail artisan migrate`. Con ello quedaron representadas en MariaDB las **siete tablas del modelo**. Creé seis mediante migraciones propias y amplié la tabla `users` que Laravel ya había creado.
+
+### Confirmación, disponibilidad y precio de la reserva
+
+Revisé la propuesta inicial de confirmación automática y decidí que **recepción confirmará las solicitudes desde el panel de administración**. Una solicitud nueva nace en `pending`. Para la consulta de disponibilidad, decidí que `pending` y `confirmed` bloquean las noches solicitadas y que `cancelled` las libera. El día de salida queda disponible para otra entrada. La comprobación de disponibilidad, la confirmación desde el panel y el aviso al huésped quedan pendientes de implementación.
+
+También definí cuándo se fija el precio. Para crear una reserva pendiente, cada noche debe tener un precio inequívoco. El total que ve el huésped se guarda en `reservations.total_price` y se mantiene si el hotel actualiza sus tarifas antes o después de confirmar. Al guardar un importe calculado, asumí el riesgo de que quede desactualizado si cambia la estancia. Por eso, si se modifican las fechas o la habitación de una reserva pendiente, la aplicación deberá volver a comprobar la disponibilidad, recalcular el total y obtener la aceptación del huésped antes de guardar el cambio.
+
+### Comprobación de claves foráneas e índices
+
+Después de aplicar las migraciones, inspeccioné `rooms`, `room_types`, `users` y `reservations` con `sail artisan db:table`. En las cuatro tablas comprobé que las claves foráneas mostraban `restrict / restrict` para actualización y borrado.
+
+Esta comprobación aclaró dos consecuencias para el proyecto. MariaDB impide eliminar un establecimiento mientras tenga una habitación, un tipo de habitación o una cuenta de personal vinculada, aunque nunca haya recibido reservas. También impide eliminar un huésped o una habitación mientras alguna reserva los referencie. **Cancelar una reserva libera las noches y conserva el historial**, porque la fila sigue vinculada al huésped y a la habitación.
+
+Al revisar los índices encontré una diferencia respecto al `slug` único de `establishments`. `RoomSeeder` localiza una habitación por `establishment_id` y `number`, y `RoomTypeSeeder` localiza un tipo por `establishment_id` y `name`. Comprobé que ninguna de las dos tablas tiene un índice único sobre esa pareja. Por tanto, MariaDB permite registrar dos habitaciones `201` o dos tipos `Doble` dentro del mismo hotel. La inspección demuestra que el esquema admite duplicados.
+
+Detecté además que las dos claves foráneas de `rooms` comprueban por separado que existen el establecimiento y el tipo de habitación. Esto permite asignar a una habitación de un hotel un tipo que pertenece a otro. Decidí conservar `rooms.establishment_id` para consultar directamente las habitaciones de cada hotel y validar la coincidencia en Laravel al crear o modificar la habitación. También habrá que impedir el traslado de un tipo a otro establecimiento mientras tenga habitaciones asignadas. Una escritura directa en MariaDB podría eludir esa validación.
+
+### Seeders y cierre de la sesión
+
+Como práctica, recorrí con `foreach` un array con los tipos Individual, Doble y Triple y sus capacidades de 1, 2 y 3 personas. El dato de prueba que comprobé en Tinker fue la habitación `201` del Hotel Restaurante Las Vegas, vinculada al tipo Doble.
+
+Actualicé `02_BASE_DE_DATOS.md` con las restricciones comprobadas, las reglas acordadas y las decisiones pendientes. Dejé identificados los siguientes pasos:
+
+- **Integridad de los datos.** Comprobar si hay números de habitación o nombres de tipo repetidos dentro de un mismo establecimiento. Verificar también si existe el `CHECK` de fechas y si alguna reserva incumple `check_out > check_in`. Después, preparar una migración nueva para añadir los dos `UNIQUE` compuestos y el `CHECK` si falta. Preví validar las fechas también en Laravel para poder explicar el error al usuario.
+- **Tarifas.** Decidir cómo tratar periodos solapados, cómo calcular una estancia que atraviesa un cambio de tarifa y si `valid_until` puede quedar vacío para expresar una vigencia indefinida.
+- **Mantenimiento.** Definir qué debe hacer recepción si una habitación pasa a `maintenance` y ya tiene reservas confirmadas para fechas futuras.
+- **Documentación.** Actualizar el diagrama relacional con el esquema aplicado y reflejar en la documentación funcional el flujo de solicitud del huésped y confirmación por recepción.s

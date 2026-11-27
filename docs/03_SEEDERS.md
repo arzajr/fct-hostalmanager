@@ -45,3 +45,5 @@ La consulta devolvió una fila:
 | number | hotel | tipo |
 |---|---|---|
 | 201 | Hotel Restaurante Las Vegas | Doble |
+
+Como ampliación, practiqué cómo recorrer con `foreach` un array de tipos Individual, Doble y Triple con capacidades de 1, 2 y 3 personas. La carga verificada en esta sesión corresponde al tipo Doble y a la habitación 201.
