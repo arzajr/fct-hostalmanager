@@ -198,3 +198,47 @@ Queda pendiente actualizar el diagrama relacional para reflejar las decisiones
 que cambiaron respecto al diseño inicial: el teléfono, la dirección y la ciudad
 pasaron a ser obligatorios, y `rooms.operational_status` pasó de `VARCHAR(20)`
 a `ENUM('active', 'maintenance')`.
+
+### Carga de datos de prueba con seeders
+
+Creé tres seeders en `aplicacion/database/seeders/` para representar un caso de prueba: la habitación `201` del Hotel Restaurante Las Vegas, de tipo `Doble` y con capacidad para dos personas.
+
+Los ejecuté primero de forma individual. Empecé por el establecimiento porque necesitaba su `id` para registrar el tipo de habitación. Después utilicé ambos identificadores para crear la habitación física.
+
+| Seeder | Registro de prueba | Campos utilizados para localizarlo |
+|---|---|---|
+| `EstablishmentSeeder` | Hotel Restaurante Las Vegas | `slug` |
+| `RoomTypeSeeder` | Tipo `Doble`, para dos personas y con camas separadas | `establishment_id` y `name` |
+| `RoomSeeder` | Habitación `201` de tipo `Doble` | `establishment_id` y `number` |
+
+En los tres seeders utilicé `updateOrInsert()` para poder repetir la carga. El primer array indica cómo localizar el registro y el segundo contiene los datos que quiero guardar. Por ejemplo, el seeder busca la habitación por su establecimiento y su número de puerta. Si encuentra la `201`, actualiza su `room_type_id`. Si es nueva, la crea con los datos de ambos arrays.
+
+Para obtener las claves foráneas utilicé `value('id')`. Busqué el hotel por su `slug` y el tipo `Doble` por el nombre y el identificador del hotel. Así, los seeders funcionan aunque MariaDB asigne identificadores distintos en otra instalación.
+
+### Comprobación de las relaciones
+
+Desde Tinker consulté la habitación `201`. Utilicé un `join` para recuperar el nombre del hotel mediante `rooms.establishment_id` y otro para recuperar el tipo mediante `rooms.room_type_id`. La consulta devolvió una sola fila:
+
+| Habitación | Establecimiento | Tipo |
+|---|---|---|
+| `201` | Hotel Restaurante Las Vegas | Doble |
+
+### Ejecución conjunta y cierre de la sesión
+
+En `DatabaseSeeder.php` quité la llamada que creaba el usuario de ejemplo y configuré el método `run()` para ejecutar los tres seeders en orden:
+
+```php
+$this->call([
+    EstablishmentSeeder::class,
+    RoomTypeSeeder::class,
+    RoomSeeder::class,
+]);
+```
+
+Desde `aplicacion/`, repetí la carga completa con un único comando:
+
+```bash
+sail artisan db:seed
+```
+
+Los tres seeders terminaron con `DONE` en el orden previsto. La habitación `201` quedó preparada como dato de prueba para el módulo de reservas. Queda pendiente actualizar el diagrama relacional con los cambios anotados al crear las migraciones.
