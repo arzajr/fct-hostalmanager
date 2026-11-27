@@ -42,6 +42,7 @@ Ejecuté `./vendor/bin/sail artisan migrate` para crear las tablas iniciales y r
 
 El entorno local quedó operativo. Comprobé que el navegador llega al contenedor de Laravel por el puerto 80 y que Laravel puede consultar MariaDB. La incidencia me ayudó a distinguir dos comprobaciones: el estado `healthy` indica que el servicio de base de datos está preparado, y las migraciones crean las tablas que necesita la aplicación.
 
+Commit de referencia: `4c9f775`.
 
 
 ## 26 de noviembre de 2026 · Migraciones de establecimientos, tipos de habitación y habitaciones
@@ -243,6 +244,8 @@ sail artisan db:seed
 
 Los tres seeders terminaron con `DONE` en el orden previsto. La habitación `201` quedó preparada como dato de prueba para el módulo de reservas. Queda pendiente actualizar el diagrama relacional con los cambios anotados al crear las migraciones.
 
+Commits de referencia: `5d4a288`, `c370b1f`.
+
 ## 27 de noviembre de 2026 · Huéspedes, reservas, tarifas y personal del establecimiento
 
 Retomé el diagrama con la habitación `201` como ejemplo. Si una huésped vuelve a alojarse en ella, se crea una reserva con otras fechas y se reutilizan la ficha de la huésped y el registro de la habitación. Como `rooms` ya existía, creé primero `guests` y después `reservations`. Así, las dos tablas referenciadas por la reserva ya existían al ejecutar su migración.
@@ -285,4 +288,6 @@ Actualicé `02_BASE_DE_DATOS.md` con las restricciones comprobadas, las reglas a
 - **Integridad de los datos.** Comprobar si hay números de habitación o nombres de tipo repetidos dentro de un mismo establecimiento. Verificar también si existe el `CHECK` de fechas y si alguna reserva incumple `check_out > check_in`. Después, preparar una migración nueva para añadir los dos `UNIQUE` compuestos y el `CHECK` si falta. Preví validar las fechas también en Laravel para poder explicar el error al usuario.
 - **Tarifas.** Decidir cómo tratar periodos solapados, cómo calcular una estancia que atraviesa un cambio de tarifa y si `valid_until` puede quedar vacío para expresar una vigencia indefinida.
 - **Mantenimiento.** Definir qué debe hacer recepción si una habitación pasa a `maintenance` y ya tiene reservas confirmadas para fechas futuras.
-- **Documentación.** Actualizar el diagrama relacional con el esquema aplicado y reflejar en la documentación funcional el flujo de solicitud del huésped y confirmación por recepción.s
+- **Documentación.** Actualizar el diagrama relacional con el esquema aplicado y reflejar en la documentación funcional el flujo de solicitud del huésped y confirmación por recepción.
+
+Commit de referencia: `5bbe558`.
